@@ -1,0 +1,145 @@
+name: Build CodeStudio
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Compile TypeScript
+      run: npm run compile
+      
+    - name: Build for macOS Intel
+      run: npm run gulp -- vscode-darwin-x64-min
+      
+    - name: Create Archive
+      run: |
+        cd ../VSCode-darwin-x64
+        tar -czf CodeStudio-macOS-Intel.tar.gz CodeStudio.app
+        
+    - name: Upload macOS Build
+      uses: actions/upload-artifact@v4
+      with:
+        name: CodeStudio-macOS-Intel
+        path: ../VSCode-darwin-x64/CodeStudio-macOS-Intel.tar.gz
+        
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Compile TypeScript  
+      run: npm run compile
+      
+    - name: Build for Linux
+      run: npm run gulp -- vscode-linux-x64-min
+      
+    - name: Create Archive
+      run: |
+        cd ../VSCode-linux-x64
+        tar -czf CodeStudio-Linux-x64.tar.gz *
+        
+    - name: Upload Linux Build
+      uses: actions/upload-artifact@v4
+      with:
+        name: CodeStudio-Linux-x64
+        path: ../VSCode-linux-x64/CodeStudio-Linux-x64.tar.gz
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Compile TypeScript
+      run: npm run compile
+      
+    - name: Build for Windows
+      run: npm run gulp -- vscode-win32-x64-min
+      
+    - name: Create Archive
+      run: |
+        cd ../VSCode-win32-x64
+        7z a CodeStudio-Windows-x64.zip *
+        
+    - name: Upload Windows Build
+      uses: actions/upload-artifact@v4
+      with:
+        name: CodeStudio-Windows-x64
+        path: ../VSCode-win32-x64/CodeStudio-Windows-x64.zip
+
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        name: CodeStudio Release v${{ github.run_number }}
+        body: |
+          ## CodeStudio Build v${{ github.run_number }}
+          
+          ### 🚀 What's New:
+          - Based on VS Code OSS
+          - Custom branding as "CodeStudio" 
+          - Separate configuration folder `.codestudio`
+          - Custom protocol `codestudio://`
+          
+          ### 📦 Downloads:
+          - **macOS Intel**: CodeStudio-macOS-Intel.tar.gz
+          - **Linux x64**: CodeStudio-Linux-x64.tar.gz  
+          - **Windows x64**: CodeStudio-Windows-x64.zip
+          
+        files: |
+          CodeStudio-macOS-Intel/CodeStudio-macOS-Intel.tar.gz
+          CodeStudio-Linux-x64/CodeStudio-Linux-x64.tar.gz
+          CodeStudio-Windows-x64/CodeStudio-Windows-x64.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
